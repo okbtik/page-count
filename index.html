@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>小説ページ数カウントツール</title>
+    <link rel="icon" href="./favicon.png">
+    <style>
+        body { font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", sans-serif; line-height: 1.6; max-width: 800px; margin: 20px auto; padding: 20px; background-color: #f8f9fa; color: #333; font-size: 16px; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 25px; }
+        h1 { text-align: center; color: #2c3e50; font-size: 1.5rem; margin-bottom: 30px; }
+        h3 { border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 0; font-size: 1.25rem; color: #2c3e50; }
+        label { display: block; margin-top: 15px; font-weight: bold; }
+        .required::after { content: " *"; color: #e74c3c; } /* 赤いアスタリスク */
+        input, textarea, select { width: 100%; padding: 12px; margin-top: 8px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; }
+        input:focus, textarea:focus { border-color: #3498db; outline: none; box-shadow: 0 0 5px rgba(52,152,219,0.3); }
+        button { background: #3498db; color: white; border: none; padding: 15px; width: 100%; border-radius: 6px; cursor: pointer; margin-top: 20px; font-size: 18px; font-weight: bold; transition: background 0.3s; }
+        button:hover { background: #2980b9; }
+        .result { background: #d4edda; color: #155724; padding: 20px; border-radius: 8px; display: none; margin-top: 20px; border: 1px solid #c3e6cb; }
+/* 3. 結果表示（resultクラス）の文字サイズを調整 */
+.result p {
+    font-size: 18px; /* 追加：結果のラベルを少し大きく */
+    margin: 10px 0;
+}
+
+#resPages {
+    font-size: 2rem; /* 強調：ページ数をさらに大きく */
+    margin: 0 5px;
+}
+
+#resLines, #resSpine {
+    font-size: 1.2rem; /* 強調：行数と背表紙も少し大きく */
+    font-weight: bold;
+}
+
+/* 4. ラベル（1行の文字数など）のサイズ */
+label {
+    display: block;
+    margin-top: 15px;
+    font-weight: bold;
+    font-size: 15px; /* 追加：ラベルを少し控えめに */
+}
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .error { color: #e74c3c; font-weight: bold; margin-top: 10px; display: none; }
+    </style>
+</head>
+<body>
+
+    <h1>小説ページ数カウントツール</h1>
+    <div style="text-align: center; "><p>新人賞応募、同人誌作成、背幅予想などにお使いください。</p></div>
+
+    <div class="card">
+        <h3>基本設定（必須）</h3>
+        <div class="grid">
+            <div>
+                <label class="required">1行の文字数</label>
+                <input type="number" id="charsPerLine" value="42">
+            </div>
+            <div>
+                <label class="required">1ページの行数</label>
+                <input type="number" id="linesPerPage" value="17">
+            </div>
+        </div>
+
+        <label class="required">本文<br><small>※「＊次章＊」で改ページ（「＊」は全角）<small></label>
+        <textarea id="mainContent" rows="12" placeholder="ここに本文を貼り付けてください..."></textarea>
+        <div id="errorMsg" class="error">※必須項目をすべて入力してください。</div>
+    </div>
+
+    <div class="card">
+        <h3>背幅厚さシミュレーター（任意）</h3>
+        <div class="grid">
+            <div>
+                <label>本文用紙</label>
+                <select id="paperType">
+                    <option value="0.06">上質55kg (薄め)</option>
+                    <option value="0.08">上質70kg (標準)</option>
+                    <option value="0.10" selected>上質90kg (厚め・一般的)</option>
+                    <option value="0.07">淡クリーム琥珀N (文庫など)</option>
+                </select>
+            </div>
+            <div>
+                <label>本文以外のページ数</label>
+                <input type="number" id="extraPages" value="0">
+            </div>
+        </div>
+    </div>
+
+    <button onclick="calculate()">計算を実行する</button>
+
+    <div id="output" class="result">
+        <h3>【計算結果】</h3>
+        <p>換算ページ数: <strong id="resPages">0</strong> ページ</p>
+        <p>総行数: <span id="resLines">0</span> 行</p>
+        <p>背表紙の厚さ目安: <span id="resSpine">0</span> mm</p>
+    </div>
+
+    <script>
+        function calculate() {
+            const charsPerLineInput = document.getElementById('charsPerLine');
+            const linesPerPageInput = document.getElementById('linesPerPage');
+            const contentInput = document.getElementById('mainContent');
+            const errorMsg = document.getElementById('errorMsg');
+            const outputDiv = document.getElementById('output');
+
+            // 必須バリデーション
+            if (!charsPerLineInput.value || !linesPerPageInput.value || !contentInput.value.trim()) {
+                errorMsg.style.display = 'block';
+                outputDiv.style.display = 'none';
+                return;
+            }
+            errorMsg.style.display = 'none';
+
+            const charsPerLine = parseInt(charsPerLineInput.value);
+            const linesPerPage = parseInt(linesPerPageInput.value);
+            const content = contentInput.value;
+            const paperThickness = parseFloat(document.getElementById('paperType').value);
+            const extraPages = parseInt(document.getElementById('extraPages').value) || 0;
+
+            const lines = content.split('\n');
+            let totalPages = 1;
+            let currentLinesInPage = 0;
+            const kinsokuChars = ['、', '。', '？', '！', '」', '』', '）', '〉', '｝'];
+
+            lines.forEach((line) => {
+                if (line.includes('＊次章＊')) {
+                    if (currentLinesInPage > 0) {
+                        totalPages++;
+                        currentLinesInPage = 0;
+                    }
+                    return;
+                }
+
+                if (line.length === 0) {
+                    currentLinesInPage++;
+                } else {
+                    let charsInCurrentLine = 0;
+                    for (let i = 0; i < line.length; i++) {
+                        charsInCurrentLine++;
+                        if (charsInCurrentLine === charsPerLine) {
+                            if (i + 1 < line.length && kinsokuChars.includes(line[i + 1])) {
+                                i++; 
+                            }
+                            currentLinesInPage++;
+                            charsInCurrentLine = 0;
+                        }
+                    }
+                    if (charsInCurrentLine > 0) {
+                        currentLinesInPage++;
+                    }
+                }
+
+                if (currentLinesInPage >= linesPerPage) {
+                    const pagesToAdd = Math.floor(currentLinesInPage / linesPerPage);
+                    totalPages += pagesToAdd;
+                    currentLinesInPage = currentLinesInPage % linesPerPage;
+                }
+            });
+
+            // 最後に余った行が0で、かつ2ページ目以降なら、直前の改ページで計算完了
+            let finalPages = (currentLinesInPage === 0 && totalPages > 1) ? totalPages - 1 : totalPages;
+
+            const totalProjectPages = finalPages + extraPages;
+            const spineWidth = (totalProjectPages / 2) * paperThickness;
+
+            document.getElementById('resPages').innerText = finalPages;
+            document.getElementById('resLines').innerText = (finalPages - 1) * linesPerPage + currentLinesInPage;
+            document.getElementById('resSpine').innerText = spineWidth.toFixed(2);
+            outputDiv.style.display = 'block';
+            
+            // 結果位置までスクロール
+            outputDiv.scrollIntoView({ behavior: 'smooth' });
+        }
+    </script>
+</body>
+</html>
